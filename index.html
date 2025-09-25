@@ -71,7 +71,7 @@
   <header>
     <div class="wrap">
       <h1>편집단가 계산기 초벌용</h1>
-      <p class="subtitle">기본단가는 유튜브 편집 기준 <strong>분당 5,000원</strong>에서 시작합니다.</p>
+      
     </div>
   </header>
 
@@ -185,16 +185,6 @@
         <button id="confirmBtn" class="confirm" type="button">확인</button>
       </div>
 
-      <div id="warnings" class="stack"></div>
-        <div class="hr"></div>
-        <div class="stack">
-          <div class="row"><label>분당 기본단가</label><div id="rowBase"></div></div>
-          <div class="row"><label>분당 추가(자료/출연/카메라/소스/자막/믹싱)</label><div id="rowPerMinAdds"></div></div>
-          <div class="row"><label>적용 분량</label><div id="rowMinutes"></div></div>
-          <div class="row"><label>총액 가산(자료 갯수/오디오/믹싱)</label><div id="rowMultipliers"></div></div>
-          <div class="hr"></div>
-          <div class="row"><label>계산식</label><div id="formula" class="muted"></div></div>
-        </div>
       </div>
     </section>
 
@@ -267,28 +257,24 @@
         else if (t==='both') add += 1200;
       }
 
-      // 출연자 (분당)
+      // 출연자 (분당) — 1명:+5000, 2-3명:+5000+4500, 4+:+5000+10000
       const talents = Number(els.talents.value||1);
-      if (talents>=2 && talents<=3) add += 1500;
-      else if (talents>=4) add += 2500;
+      if (talents===1) add += 5000;
+      else if (talents>=2 && talents<=3) add += (5000 + 4500);
+      else if (talents>=4) add += (5000 + 10000);
 
-      // 카메라 (분당)
+      // 카메라 (분당) — 1대:0, 2-3대:+15000, 4+:+30000
       const cams = Number(els.cams.value||1);
-      if (cams===3) add += 2000; else if (cams>=4) add += 5000;
+      if (cams>=2 && cams<=3) add += 15000; else if (cams>=4) add += 30000;
 
-      // 원본 소스 시간 (분당)
-      const h = Number(els.srcHour.value||0);
-      const m = Number(els.srcMin.value||0);
-      const totalMins = h*60 + m;
-      if (totalMins>60 && totalMins<=180) add += 1400;
-      else if (totalMins>180) add += 3000;
+      // 원본 소스 시간: 분당 추가 제거 (총액에서 비율 가산으로 처리)
 
-      // 자막 난이도 (분당)
-      const sub = els.subtitleLevel.value;
-      if (sub==='high') add += 4000; else if (sub==='mid') add += 2000;
+      // 자막 난이도 (분당) — 상:+40000, 중:+25000, 하:+0
+      const sub = els.subtitleLevel ? els.subtitleLevel.value : 'low';
+      if (sub==='high') add += 40000; else if (sub==='mid') add += 25000;
 
-      // 오디오 믹싱 (분당 or 총액)
-      if (els.mixing.value==='balance') add += 2000; // 분당 추가
+      // 오디오 믹싱 — 연출 필요: 분당 +4000 (추가로 총액 20%는 totalCalc에서)
+      if (els.mixing.value==='balance') add += 4000; 
 
       return { base, add, perMin: base + add };
     }
@@ -300,40 +286,70 @@
       const {base, add, perMin} = perMinuteCalc();
       let total = perMin * avg;
 
-      // 총액 가산 (자료화면 갯수 / 외부 오디오 / 간단 믹싱)
-      const multipliers = [];
-
+      // 총액 가산 (자료화면 갯수 / 외부 오디오 / 믹싱 / 소스비율)
+      // 자료화면 갯수
       if (els.hasBroll.value==='Y'){
         const c = Number(els.brollCount.value||0);
-        if (c>=1 && c<=12){ total *= 1.20; multipliers.push('+20% (자료 1~12개)'); }
-        else if (c>=13 && c<=40){ total *= 1.45; multipliers.push('+45% (자료 13~40개)'); }
-        else if (c>=41){ total *= 1.65; multipliers.push('+65% (자료 41개~)'); }
+        if (c>=1 && c<=12){ total *= 1.20; }
+        else if (c>=13 && c<=40){ total *= 1.45; }
+        else if (c>=41){ total *= 1.65; }
       }
 
-      if (els.extAudio.value==='Y'){ total *= 1.05; multipliers.push('+5% (외부 오디오트랙)'); }
-      if (els.mixing.value==='simple'){ total *= 1.08; multipliers.push('+8% (간단 볼륨조절)'); }
+      // 외부 오디오트랙 유: 총액 +5%
+      if (els.extAudio.value==='Y'){ total *= 1.05; }
 
-      
+      // 오디오 믹싱 간단: 총액 +20%
+      if (els.mixing.value==='simple'){ total *= 1.20; }
 
-      
+      // 오디오 믹싱 연출: 분당 +4000(위에서 반영) 후 총액 +20%
+      if (els.mixing.value==='balance'){ total *= 1.20; }
 
-      
+      // 원본소스 시간 비율 가산: (원본 분 / 편집 평균분)
+      const h = Number(els.srcHour.value||0);
+      const m = Number(els.srcMin.value||0);
+      const srcMins = h*60 + m;
+      const ratio = avg > 0 ? (srcMins / avg) : 0;
+      if (ratio >= 20) total *= 2.0; // +100%
+      else if (ratio >= 10) total *= 1.5; // +50%
+      else if (ratio >= 7) total *= 1.4; // +40%
+      else if (ratio >= 5) total *= 1.2; // +20%
+      // 2.5배 이하는 변경 없음
 
       return {total, perMin, base, add, avgMinutes: avg};
     }
 
+    function easeOutCubic(t){ return 1 - Math.pow(1 - t, 3); }
+
+    function openModal(finalTotal){
+      els.modal.classList.remove('hidden');
+      const duration = 1800; // ms
+      const start = performance.now();
+      const base = Math.max(10000, finalTotal * 0.6);
+      function frame(now){
+        const t = Math.min(1, (now - start)/duration);
+        const eased = easeOutCubic(t);
+        const jitter = (1-t) * (Math.random()*finalTotal*0.05);
+        const current = Math.round(base + (finalTotal - base)*eased + jitter);
+        els.roulette.textContent = current.toLocaleString('ko-KR') + '원';
+        if (t < 1) requestAnimationFrame(frame); else els.roulette.textContent = finalTotal.toLocaleString('ko-KR') + '원';
+      }
+      requestAnimationFrame(frame);
+    }
+
     function bind(){
-      document.querySelectorAll('input,select').forEach(el => el.addEventListener('input', totalCalc));$1if (els.confirmBtn){
+      document.querySelectorAll('input,select').forEach(el => { el.addEventListener('input', totalCalc); el.addEventListener('change', totalCalc); });
+
+      if (els.confirmBtn){
         els.confirmBtn.addEventListener('click', ()=>{
           const { total } = totalCalc();
           openModal(Math.round(total));
         });
       }
-        openModal(Math.round(total));
-      });
-      els.closeModal.addEventListener('click', ()=>{
-        els.modal.classList.add('hidden');
-      });
+      if (els.closeModal){
+        els.closeModal.addEventListener('click', ()=>{
+          els.modal.classList.add('hidden');
+        });
+      }
 
       setBrollEnabled();
       totalCalc();
