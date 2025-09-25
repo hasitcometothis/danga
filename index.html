@@ -54,17 +54,24 @@
       .mini{width:100%}
       .col2{grid-template-columns:1fr}
     }
+    .confirm{background:#1a66ff;border:1px solid #2b5bdc;color:#fff;padding:12px 16px;border-radius:12px;font-weight:700;cursor:pointer}
+    .confirm:active{transform:translateY(1px)}
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+    .modal.hidden{display:none}
+    .modal-card{background:#0f1520;border:1px solid #2a3442;border-radius:16px;max-width:520px;width:100%;padding:24px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+    .modal-title{font-size:22px;margin-bottom:6px}
+    .modal-text{opacity:.85;margin-bottom:14px}
+    .roulette{font-size:40px;font-weight:900;letter-spacing:-.5px;margin:6px 0 18px}
+    @media (max-width:640px){
+      .roulette{font-size:32px}
+    }
   </style>
 </head>
 <body>
   <header>
-    <div class="wrap total">
-      <div>
-        <div class="kicker">최종 단가</div>
-        <strong id="total">0원</strong>
-        <small id="minuteInfo" class="pill">분당 0원 × 0분</small>
-      </div>
-      <div class="badge ok" id="statusBadge">초벌 계산</div>
+    <div class="wrap">
+      <h1>편집단가 계산기 초벌용</h1>
+      <p class="subtitle">기본단가는 유튜브 편집 기준 <strong>분당 5,000원</strong>에서 시작합니다.</p>
     </div>
   </header>
 
@@ -173,23 +180,12 @@
               <option value="Y" selected>유</option>
               <option value="N">무</option>
             </select>
-          </div>
-
-          <div class="row">
-            <label>자막 난이도</label>
-            <select id="subtitleLevel">
-              <option value="low" selected>하</option>
-              <option value="mid">중</option>
-              <option value="high">상</option>
-            </select>
-          </div>
-        </div>
+          </div>$1
+      <div class="card" id="confirmCard" style="margin-top:0;">
+        <button id="confirmBtn" class="confirm">확인</button>
       </div>
 
-      <div class="card">
-        <h2>결과</h2>
-        <div class="hr"></div>
-        <div id="warnings" class="stack"></div>
+      <div id="warnings" class="stack"></div>
         <div class="hr"></div>
         <div class="stack">
           <div class="row"><label>분당 기본단가</label><div id="rowBase"></div></div>
@@ -203,10 +199,17 @@
     </section>
 
     <section class="footer">
-      <div>ⓘ 초벌 견적 용도의 계산기입니다. 실제 견적은 프로젝트 성격/일정/검수 횟수 등에 따라 변동될 수 있습니다.</div>
-      <div style="margin-top:6px">GitHub Pages 배포: 이 파일을 리포지토리에 <code>index.html</code>로 커밋 → Settings → Pages → Branch 지정 후 접속.</div>
-      <div style="margin-top:8px"><button class="copy" id="copyJSON">설정값 JSON 복사</button></div>
+      <div>건전한 산업을 위해 <strong>최소한으로 계산된 단가보다 30% 이상</strong> 지급 부탁드립니다.</div>
     </section>
+    <!-- 결과 팝업 -->
+    <div id="resultModal" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-card">
+        <div class="modal-title">짜잔!</div>
+        <div class="modal-text">당신이 작업자에게 의뢰할 수 있는 적절한 단가는</div>
+        <div id="rouletteNumber" class="roulette">0원</div>
+        <button id="closeModal" class="confirm">닫기</button>
+      </div>
+    </div>
   </main>
 
   <script>
@@ -229,16 +232,10 @@
       hasLogo: document.getElementById('hasLogo'),
       hasTitle: document.getElementById('hasTitle'),
       subtitleLevel: document.getElementById('subtitleLevel'),
-      total: document.getElementById('total'),
-      minuteInfo: document.getElementById('minuteInfo'),
-      statusBadge: document.getElementById('statusBadge'),
-      warnings: document.getElementById('warnings'),
-      rowBase: document.getElementById('rowBase'),
-      rowPerMinAdds: document.getElementById('rowPerMinAdds'),
-      rowMinutes: document.getElementById('rowMinutes'),
-      rowMultipliers: document.getElementById('rowMultipliers'),
-      formula: document.getElementById('formula'),
-      copyJSON: document.getElementById('copyJSON'),
+      confirmBtn: document.getElementById('confirmBtn'),
+      modal: document.getElementById('resultModal'),
+      closeModal: document.getElementById('closeModal'),
+      roulette: document.getElementById('rouletteNumber'),
     };
 
     function setBrollEnabled() {
@@ -316,55 +313,44 @@
       if (els.extAudio.value==='Y'){ total *= 1.05; multipliers.push('+5% (외부 오디오트랙)'); }
       if (els.mixing.value==='simple'){ total *= 1.08; multipliers.push('+8% (간단 볼륨조절)'); }
 
-      // 상단 표시
-      els.total.textContent = fmt(total);
-      els.minuteInfo.textContent = `분당 ${fmt(perMin)} × ${avg.toFixed(1)}분`;
-      els.statusBadge.textContent = '자동 계산 중';
+      
 
-      // 경고/안내
-      const warns = [];
-      if (els.hasLogo.value==='N') warns.push('<span class="badge warn">로고 제작비 별도 협의</span>');
-      if (els.hasTitle.value==='N') warns.push('<span class="badge warn">오프닝 타이틀 제작비 별도 협의</span>');
-      if (els.isYoutube.value==='N') warns.push('<span class="badge danger">유튜브 편집 X → 기본 분당 0원(별도 기준 필요)</span>');
-      els.warnings.innerHTML = warns.length? `<div class="note">${warns.join(' ')}<br><span class="muted">※ 추가 제작비는 현재 총액에 포함되지 않습니다.</span></div>` : '<div class="note">특이사항 없음</div>';
+      
 
-      // 행별 요약
-      els.rowBase.textContent = fmt(base);
-      els.rowPerMinAdds.textContent = `+ ${fmt(add)} → 분당 ${fmt(perMin)}`;
-      els.rowMinutes.textContent = `${min}~${max}분 (평균 ${avg.toFixed(1)}분)`;
-      els.rowMultipliers.textContent = multipliers.length? multipliers.join(' / ') : '가산 없음';
+      
 
-      els.formula.textContent = `(${fmt(base)} + 분당 추가 ${fmt(add)}) × 평균분 ${avg.toFixed(1)} × 가산계수(${ multipliers.length? multipliers.join(' · ').replaceAll('+','') : '1.00' })`;
-
-      return {total, perMin, base, add, avgMinutes: avg, multipliers};
+      return {total, perMin, base, add, avgMinutes: avg};
     }
 
     function bind(){
       document.querySelectorAll('input,select').forEach(el => el.addEventListener('input', totalCalc));
-      els.copyJSON.addEventListener('click', ()=>{
-        const {avg} = getMinutes();
-        const h = Number(els.srcHour.value||0); const m = Number(els.srcMin.value||0);
-        const payload = {
-          isYoutube: els.isYoutube.value==='Y',
-          hasBroll: els.hasBroll.value==='Y',
-          brollType: els.brollType.value,
-          brollCount: Number(els.brollCount.value||0),
-          talents: Number(els.talents.value||1),
-          minutes: {min: Number(els.minLen.value||0), max: Number(els.maxLen.value||0), avg},
-          cameras: Number(els.cams.value||1),
-          externalAudioTrack: els.extAudio.value==='Y',
-          mixing: els.mixing.value,
-          sourceDuration: {hours: h, minutes: m, totalMinutes: h*60+m},
-          hasLogo: els.hasLogo.value==='Y',
-          hasTitle: els.hasTitle.value==='Y',
-          subtitleLevel: els.subtitleLevel.value,
-          snapshot: totalCalc()
-        };
-        const text = JSON.stringify(payload, null, 2);
-        navigator.clipboard.writeText(text).then(()=>{
-          els.statusBadge.textContent = '설정 JSON 복사됨';
-        });
+
+      function easeOutCubic(t){ return 1 - Math.pow(1 - t, 3); }
+
+      function openModal(finalTotal){
+        els.modal.classList.remove('hidden');
+        const duration = 1800; // ms
+        const start = performance.now();
+        const base = Math.max(10000, finalTotal * 0.6);
+        function frame(now){
+          const t = Math.min(1, (now - start)/duration);
+          const eased = easeOutCubic(t);
+          const jitter = (1-t) * (Math.random()*finalTotal*0.05);
+          const current = Math.round(base + (finalTotal - base)*eased + jitter);
+          els.roulette.textContent = current.toLocaleString('ko-KR') + '원';
+          if (t < 1) requestAnimationFrame(frame); else els.roulette.textContent = finalTotal.toLocaleString('ko-KR') + '원';
+        }
+        requestAnimationFrame(frame);
+      }
+
+      els.confirmBtn.addEventListener('click', ()=>{
+        const { total } = totalCalc();
+        openModal(Math.round(total));
       });
+      els.closeModal.addEventListener('click', ()=>{
+        els.modal.classList.add('hidden');
+      });
+
       setBrollEnabled();
       totalCalc();
     }
