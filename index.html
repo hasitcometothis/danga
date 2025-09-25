@@ -180,9 +180,9 @@
               <option value="Y" selected>유</option>
               <option value="N">무</option>
             </select>
-          </div>$1
+          </div>
       <div class="card" id="confirmCard" style="margin-top:0;">
-        <button id="confirmBtn" class="confirm">확인</button>
+        <button id="confirmBtn" class="confirm" type="button">확인</button>
       </div>
 
       <div id="warnings" class="stack"></div>
@@ -323,28 +323,12 @@
     }
 
     function bind(){
-      document.querySelectorAll('input,select').forEach(el => el.addEventListener('input', totalCalc));
-
-      function easeOutCubic(t){ return 1 - Math.pow(1 - t, 3); }
-
-      function openModal(finalTotal){
-        els.modal.classList.remove('hidden');
-        const duration = 1800; // ms
-        const start = performance.now();
-        const base = Math.max(10000, finalTotal * 0.6);
-        function frame(now){
-          const t = Math.min(1, (now - start)/duration);
-          const eased = easeOutCubic(t);
-          const jitter = (1-t) * (Math.random()*finalTotal*0.05);
-          const current = Math.round(base + (finalTotal - base)*eased + jitter);
-          els.roulette.textContent = current.toLocaleString('ko-KR') + '원';
-          if (t < 1) requestAnimationFrame(frame); else els.roulette.textContent = finalTotal.toLocaleString('ko-KR') + '원';
-        }
-        requestAnimationFrame(frame);
+      document.querySelectorAll('input,select').forEach(el => el.addEventListener('input', totalCalc));$1if (els.confirmBtn){
+        els.confirmBtn.addEventListener('click', ()=>{
+          const { total } = totalCalc();
+          openModal(Math.round(total));
+        });
       }
-
-      els.confirmBtn.addEventListener('click', ()=>{
-        const { total } = totalCalc();
         openModal(Math.round(total));
       });
       els.closeModal.addEventListener('click', ()=>{
